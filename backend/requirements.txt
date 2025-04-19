@@ -1,0 +1,10 @@
+Flask
+openai
+spacy
+python-docx
+PyMuPDF
+Flask-Login
+Flask-Bcrypt
+pymongo
+python-dotenv
+flask-cors
