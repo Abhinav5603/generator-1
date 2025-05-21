@@ -24,7 +24,7 @@ JWT_SECRET = os.getenv("JWT_SECRET", "555")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION = 24  # hours
 
-client = MongoClient("mongodb://localhost:27017/")
+client = MongoClient("mongodb+srv://test20061004:bJVWovgn3uVv3VJb@cluster0.vhqnytc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 db = client["interview_app_db"]
 users_collection = db["users"]
 questions_collection = db["questions"]
