@@ -11,3 +11,4 @@ PyMuPDF==1.23.7
 uuid==1.30
 traceback2==1.4.0
 gunicorn
+pymongo[srv]
