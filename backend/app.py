@@ -15,15 +15,21 @@ from functools import wraps
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, 
-     resources={
-         r"/*": {
-             "origins": ["https://frontend-5q11.onrender.com"],
-             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-             "allow_headers": ["Content-Type", "Authorization"],
-             "supports_credentials": True
-         }
-})
+# CORS configuration
+app.config['CORS_HEADERS'] = 'Content-Type'
+app.config['CORS_SUPPORTS_CREDENTIALS'] = True
+app.config['CORS_ORIGINS'] = ['https://frontend-5q11.onrender.com']
+
+cors = CORS(app, 
+    resources={
+        r"/*": {
+            "origins": app.config['CORS_ORIGINS'],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True,
+            "expose_headers": ["Content-Type", "Authorization"]
+        }
+    })
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -286,36 +292,62 @@ def process_voice(current_user):
         "skills": info["skills"]
     })
 
-@app.route("/api/process-voice-public", methods=["POST"])
+
+@app.route("/api/process-voice-public", methods=["POST", "OPTIONS"])
 def process_voice_public():
-    data = request.json
-    transcription = data.get("transcription", "")
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "https://frontend-5q11.onrender.com")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        response.headers.add("Access-Control-Allow-Credentials", "true")
+        return response
 
-    if not transcription:
-        return jsonify({"error": "No transcription provided"}), 400
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+            
+        transcription = data.get("transcription", "")
+        if not transcription:
+            return jsonify({"error": "No transcription provided"}), 400
 
-    info = extract_info(transcription)
-    questions = generate_questions(skills=info["skills"], resume_text=transcription)
-    
-    # Generate expected answers for each question
-    expected_answers = generate_expected_answers(questions, skills=info["skills"], resume_text=transcription)
-    
-    # Store questions and expected answers
-    question_set_id = str(uuid.uuid4())
-    questions_collection.insert_one({
-        "_id": question_set_id,
-        "user_id": "public_user",
-        "questions": questions,
-        "expected_answers": expected_answers,
-        "skills": info["skills"],
-        "timestamp": datetime.utcnow()
-    })
+        info = extract_info(transcription)
+        questions = generate_questions(skills=info["skills"], resume_text=transcription)
+        
+        # Generate expected answers for each question
+        expected_answers = [generate_expected_answers(q, info["skills"]) for q in questions]
+        
+        # Store questions and expected answers
+        question_set_id = str(uuid.uuid4())
+        questions_collection.insert_one({
+            "_id": question_set_id,
+            "user_id": "public_user",
+            "questions": questions,
+            "expected_answers": expected_answers,
+            "skills": info["skills"],
+            "timestamp": datetime.utcnow()
+        })
 
-    return jsonify({
-        "question_set_id": question_set_id,
-        "questions": questions,
-        "skills": info["skills"]
-    })
+        response = jsonify({
+            "question_set_id": question_set_id,
+            "questions": questions,
+            "skills": info["skills"]
+        })
+        
+        response.headers.add("Access-Control-Allow-Origin", "https://frontend-5q11.onrender.com")
+        response.headers.add("Access-Control-Allow-Credentials", "true")
+        return response
+        
+    except Exception as e:
+        print(f"Error in process_voice_public: {str(e)}")
+        error_response = jsonify({
+            "error": "An error occurred while processing your request",
+            "details": str(e)
+        })
+        error_response.headers.add("Access-Control-Allow-Origin", "https://frontend-5q11.onrender.com")
+        error_response.headers.add("Access-Control-Allow-Credentials", "true")
+        return error_response, 500
 
 @app.route("/api/question-history", methods=["GET"])
 @token_required
