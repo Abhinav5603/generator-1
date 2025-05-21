@@ -1,35 +1,10 @@
 import React, { useState } from 'react';
 import { Brain, Home, Lightbulb, Info, Menu, X, Sparkles, Clock } from 'lucide-react';
+import HistoryModal from './HistoryModal'; // Import the new component
 
 const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const fetchHistory = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("http://localhost:5000/api/question-history-public");
-      
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-      
-      const data = await res.json();
-      console.log("Fetched history:", data);
-      
-      // Ensure data is an array before setting state
-      setHistory(Array.isArray(data) ? data : []);
-      setShowHistory(true);
-    } catch (err) {
-      console.error("Error fetching history:", err);
-      // Show empty history in case of error
-      setHistory([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleNavClick = (section) => {
     setIsMobileMenuOpen(false);
@@ -40,7 +15,7 @@ const Navbar = () => {
     } else if (section === 'Features') {
       document.getElementById('features-section')?.scrollIntoView({ behavior: 'smooth' });
     } else if (section === 'History') {
-      fetchHistory(); // Load history modal
+      setShowHistory(true); // Show history modal
     }
   };
 
@@ -111,60 +86,8 @@ const Navbar = () => {
         </div>
       </nav>
 
-      {/* History Modal */}
-      {showHistory && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white max-w-xl w-full rounded-lg shadow-lg p-6 overflow-y-auto max-h-[80vh]">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">Generated Questions History</h3>
-              <button 
-                onClick={() => setShowHistory(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            {isLoading ? (
-              <div className="py-16 text-center">
-                <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                <p className="mt-4 text-gray-500">Loading history...</p>
-              </div>
-            ) : history.length === 0 ? (
-              <div className="py-8 text-center">
-                <p className="text-gray-500">No question history found.</p>
-              </div>
-            ) : (
-              <ul className="space-y-4">
-                {history.map((entry, idx) => (
-                  <li key={idx} className="border border-gray-300 rounded-md p-3">
-                    <div className="text-sm text-gray-500 mb-2">
-                      {entry.timestamp ? new Date(entry.timestamp).toLocaleString() : "No timestamp"}
-                    </div>
-                    <ul className="list-disc pl-5 text-gray-800">
-                      {Array.isArray(entry.questions) ? 
-                        entry.questions.map((q, i) => (
-                          <li key={i}>{q}</li>
-                        )) : 
-                        <li>No questions available</li>
-                      }
-                    </ul>
-                  </li>
-                ))}
-              </ul>
-            )}
-            
-            <div className="mt-6 flex justify-center">
-              <button
-                onClick={() => setShowHistory(false)}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* History Modal Component */}
+      <HistoryModal showHistory={showHistory} setShowHistory={setShowHistory} />
     </>
   );
 };

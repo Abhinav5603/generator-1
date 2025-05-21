@@ -139,6 +139,48 @@ def generate_questions(skills=None, resume_text=None):
     # Remove duplicates and return the final list
     return list(dict.fromkeys(verified_questions))[:15]  # Limit to 15 questions
 
+def generate_expected_answers(questions, skills=None, resume_text=None):
+    """Generate expected answers for each interview question"""
+    if not questions:
+        return []
+        
+    # Extract experience for context
+    experience_text = extract_experience(resume_text) if resume_text else ""
+    skills_text = ", ".join(skills) if skills else ""
+    
+    expected_answers = []
+    
+    for question in questions:
+        prompt = f"""
+        You are an expert interviewer evaluating responses to technical interview questions.
+        
+        Question: {question}
+        
+        Candidate Skills: {skills_text}
+        Candidate Experience: {experience_text}
+        
+        Generate an ideal answer to this question that would receive a perfect score.
+        The answer should be comprehensive but concise (150-250 words).
+        Include specific technical details where appropriate.
+        
+        Ideal Answer:
+        """
+        
+        response = client.chat.completions.create(
+            model="mistralai/Mixtral-8x7B-Instruct-v0.1",
+            messages=[
+                {"role": "system", "content": "You are an expert technical interviewer creating model answers for evaluation."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=300
+        )
+        
+        answer = response.choices[0].message.content.strip()
+        expected_answers.append(answer)
+    
+    return expected_answers
+
 def extract_experience(resume_text):
     """Extract relevant experience sections from the resume"""
     experience_sections = []

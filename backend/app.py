@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, make_response
 from utils.extractor import extract_text, extract_info
-from utils.question_generator import generate_questions
+from utils.question_generator import generate_questions, generate_expected_answers
 import os
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -9,41 +9,37 @@ from datetime import datetime, timedelta
 import bcrypt
 import jwt
 import uuid
+import traceback
 from functools import wraps
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)  # Enable CORS with credentials
+CORS(app, origins=["*"], supports_credentials=True)
+
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# JWT Secret Key - Replace with a secure key in production
-JWT_SECRET = os.getenv("JWT_SECRET", "your_jwt_secret_key")
+JWT_SECRET = os.getenv("JWT_SECRET", "555")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION = 24  # hours
 
-# Connect to MongoDB
 client = MongoClient("mongodb://localhost:27017/")
 db = client["interview_app_db"]
 users_collection = db["users"]
 questions_collection = db["questions"]
+user_answers_collection = db["user_answers"]
 
-# Create indexes
 users_collection.create_index("email", unique=True)
 users_collection.create_index("username", unique=True)
 
-# Authentication decorator
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        token = None
-        # Get token from cookies
         token = request.cookies.get('token')
         if not token:
             return jsonify({'message': 'Token is missing!'}), 401
         try:
-            # Decode the token
             data = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
             current_user = users_collection.find_one({"_id": data['user_id']})
             if not current_user:
@@ -60,26 +56,20 @@ def register():
     data = request.json
     if not data:
         return jsonify({"message": "No data provided"}), 400
-        
+
     username = data.get('username', '').strip()
     email = data.get('email', '').strip()
     password = data.get('password', '').strip()
-    
-    # Validate data
+
     if not username or not email or not password:
         return jsonify({"message": "All fields are required"}), 400
-    
-    # Check if user already exists
+
     if users_collection.find_one({"email": email}):
         return jsonify({"message": "User with this email already exists"}), 409
-        
     if users_collection.find_one({"username": username}):
         return jsonify({"message": "Username is already taken"}), 409
-        
-    # Hash the password
+
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    
-    # Create new user
     new_user = {
         "_id": str(uuid.uuid4()),
         "username": username,
@@ -87,59 +77,85 @@ def register():
         "password": hashed_password,
         "created_at": datetime.utcnow()
     }
-    
     users_collection.insert_one(new_user)
-    
+
     return jsonify({"message": "User registered successfully"}), 201
 
 @app.route("/api/login", methods=["POST"])
 def login():
-    data = request.json
-    if not data:
-        return jsonify({"message": "No data provided"}), 400
-        
-    email = data.get('email', '').strip()
-    password = data.get('password', '').strip()
-    
-    if not email or not password:
-        return jsonify({"message": "Email and password are required"}), 400
-        
-    # Find user by email
-    user = users_collection.find_one({"email": email})
-    if not user:
-        return jsonify({"message": "Invalid email or password"}), 401
-        
-    # Check password
-    if not bcrypt.checkpw(password.encode('utf-8'), user['password']):
-        return jsonify({"message": "Invalid email or password"}), 401
-        
-    # Generate JWT token
-    token = jwt.encode({
-        'user_id': user['_id'],
-        'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION)
-    }, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    
-    # Create response with token in cookie
-    response = make_response(jsonify({
-        "message": "Login successful",
-        "user": {
-            "id": user['_id'],
-            "username": user['username'],
-            "email": user['email']
-        }
-    }))
-    
-    # Set secure HTTP-only cookie
-    response.set_cookie(
-        'token',
-        token,
-        httponly=True,
-        secure=False,  # Set to True in production with HTTPS
-        samesite='Lax',
-        max_age=JWT_EXPIRATION * 3600  # Convert hours to seconds
-    )
-    
-    return response
+    try:
+        if users_collection is None:
+            return jsonify({"message": "Database connection error"}), 500
+
+        data = request.json
+        if not data:
+            return jsonify({"message": "No data provided"}), 400
+
+        email = data.get('email', '').strip()
+        password = data.get('password', '').strip()
+
+        if not email or not password:
+            return jsonify({"message": "Email and password are required"}), 400
+
+        user = users_collection.find_one({"email": email})
+        if not user:
+            return jsonify({"message": "Invalid email or password"}), 401
+
+        print(f"Found user: {user['username']}")
+
+        password_bytes = password.encode('utf-8')
+        stored_password = user['password']
+        print(f"Password type: {type(password_bytes)}, Stored password type: {type(stored_password)}")
+
+        if isinstance(stored_password, str):
+            stored_password = stored_password.encode('utf-8')
+
+        try:
+            password_match = bcrypt.checkpw(password_bytes, stored_password)
+            print(f"Password match: {password_match}")
+
+            if not password_match:
+                return jsonify({"message": "Invalid email or password"}), 401
+        except Exception as pwd_error:
+            print(f"Password check error: {str(pwd_error)}")
+            return jsonify({"message": f"Password verification error: {str(pwd_error)}"}), 500
+
+        try:
+            token_payload = {
+                'user_id': user['_id'],
+                'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION)
+            }
+            print(f"JWT payload: {token_payload}")
+
+            token = jwt.encode(token_payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+            print(f"Generated token type: {type(token)}")
+        except Exception as jwt_error:
+            print(f"JWT generation error: {str(jwt_error)}")
+            return jsonify({"message": f"Authentication token error: {str(jwt_error)}"}), 500
+
+        response = make_response(jsonify({
+            "message": "Login successful",
+            "user": {
+                "id": user['_id'],
+                "username": user['username'],
+                "email": user['email']
+            }
+        }))
+
+        response.set_cookie(
+            'token',
+            token,
+            httponly=True,
+            secure=False,
+            samesite='Lax',
+            max_age=JWT_EXPIRATION * 3600
+        )
+
+        return response
+    except Exception as e:
+        print(f"Login error: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"message": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/logout", methods=["POST"])
 def logout():
@@ -164,7 +180,6 @@ def upload_resume(current_user):
         return jsonify({"error": "No file part"}), 400
 
     file = request.files['file']
-
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
 
@@ -174,28 +189,33 @@ def upload_resume(current_user):
     text = extract_text(file_path)
     info = extract_info(text)
     questions = generate_questions(skills=info["skills"], resume_text=text)
-
-    # Save to MongoDB with user ID
+    
+    # Generate expected answers for each question
+    expected_answers = generate_expected_answers(questions, skills=info["skills"], resume_text=text)
+    
+    # Store questions and expected answers
+    question_set_id = str(uuid.uuid4())
     questions_collection.insert_one({
+        "_id": question_set_id,
         "user_id": current_user['_id'],
         "questions": questions,
+        "expected_answers": expected_answers,
         "skills": info["skills"],
         "timestamp": datetime.utcnow()
     })
 
     return jsonify({
+        "question_set_id": question_set_id,
         "questions": questions,
         "skills": info["skills"]
     })
 
-# New public resume upload endpoint that doesn't require authentication
 @app.route("/api/upload-resume-public", methods=["POST"])
 def upload_resume_public():
     if 'file' not in request.files:
         return jsonify({"error": "No file part"}), 400
 
     file = request.files['file']
-
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
 
@@ -205,21 +225,27 @@ def upload_resume_public():
     text = extract_text(file_path)
     info = extract_info(text)
     questions = generate_questions(skills=info["skills"], resume_text=text)
-
-    # Save to MongoDB with a generic user ID for public submissions
+    
+    # Generate expected answers for each question
+    expected_answers = generate_expected_answers(questions, skills=info["skills"], resume_text=text)
+    
+    # Store questions and expected answers
+    question_set_id = str(uuid.uuid4())
     questions_collection.insert_one({
+        "_id": question_set_id,
         "user_id": "public_user",
         "questions": questions,
+        "expected_answers": expected_answers,
         "skills": info["skills"],
         "timestamp": datetime.utcnow()
     })
 
     return jsonify({
+        "question_set_id": question_set_id,
         "questions": questions,
         "skills": info["skills"]
     })
 
-# Original authenticated voice endpoint
 @app.route("/api/process-voice", methods=["POST"])
 @token_required
 def process_voice(current_user):
@@ -231,21 +257,27 @@ def process_voice(current_user):
 
     info = extract_info(transcription)
     questions = generate_questions(skills=info["skills"], resume_text=transcription)
-
-    # Save to MongoDB with user ID
+    
+    # Generate expected answers for each question
+    expected_answers = generate_expected_answers(questions, skills=info["skills"], resume_text=transcription)
+    
+    # Store questions and expected answers
+    question_set_id = str(uuid.uuid4())
     questions_collection.insert_one({
+        "_id": question_set_id,
         "user_id": current_user['_id'],
         "questions": questions,
+        "expected_answers": expected_answers,
         "skills": info["skills"],
         "timestamp": datetime.utcnow()
     })
 
     return jsonify({
+        "question_set_id": question_set_id,
         "questions": questions,
         "skills": info["skills"]
     })
 
-# New public voice endpoint that doesn't require authentication
 @app.route("/api/process-voice-public", methods=["POST"])
 def process_voice_public():
     data = request.json
@@ -256,41 +288,53 @@ def process_voice_public():
 
     info = extract_info(transcription)
     questions = generate_questions(skills=info["skills"], resume_text=transcription)
-
-    # Save to MongoDB with a generic user ID for public submissions
+    
+    # Generate expected answers for each question
+    expected_answers = generate_expected_answers(questions, skills=info["skills"], resume_text=transcription)
+    
+    # Store questions and expected answers
+    question_set_id = str(uuid.uuid4())
     questions_collection.insert_one({
+        "_id": question_set_id,
         "user_id": "public_user",
         "questions": questions,
+        "expected_answers": expected_answers,
         "skills": info["skills"],
         "timestamp": datetime.utcnow()
     })
 
     return jsonify({
+        "question_set_id": question_set_id,
         "questions": questions,
         "skills": info["skills"]
     })
 
-# Add a new public endpoint for history that doesn't require auth
-@app.route("/api/question-history-public", methods=["GET"])
-def question_history_public():
-    # Fetch the most recent 20 entries from the questions collection
-    history = list(questions_collection.find(
-        {}, 
-        {"_id": 0, "user_id": 0}  # Exclude these fields
-    ).sort("timestamp", -1).limit(20))  # Sort by timestamp descending and limit to 20
-    
-    return jsonify(history)
-
-# Keep the authenticated endpoint too
 @app.route("/api/question-history", methods=["GET"])
 @token_required
 def question_history(current_user):
-    # Fetch only the current user's question history
     history = list(questions_collection.find(
-        {"user_id": current_user['_id']}, 
-        {"_id": 0, "user_id": 0}
+        {"user_id": current_user['_id']},
+        {"_id": 1, "user_id": 0, "questions": 1, "skills": 1, "timestamp": 1}
     ))
     history.sort(key=lambda x: x["timestamp"], reverse=True)
+    
+    # Convert ObjectId to string for JSON serialization
+    for item in history:
+        item["_id"] = str(item["_id"])
+    
+    return jsonify(history)
+
+@app.route("/api/question-history-public", methods=["GET"])
+def question_history_public():
+    history = list(questions_collection.find(
+        {},
+        {"_id": 1, "questions": 1, "skills": 1, "timestamp": 1}
+    ).sort("timestamp", -1).limit(20))
+    
+    # Convert ObjectId to string for JSON serialization
+    for item in history:
+        item["_id"] = str(item["_id"])
+    
     return jsonify(history)
 
 @app.route("/api/change-password", methods=["POST"])
@@ -299,27 +343,119 @@ def change_password(current_user):
     data = request.json
     if not data:
         return jsonify({"message": "No data provided"}), 400
-        
+
     current_password = data.get('current_password', '').strip()
     new_password = data.get('new_password', '').strip()
-    
+
     if not current_password or not new_password:
-        return jsonify({"message": "Current password and new password are required"}), 400
-        
-    # Verify current password
+        return jsonify({"message": "Current and new passwords are required"}), 400
+
     if not bcrypt.checkpw(current_password.encode('utf-8'), current_user['password']):
         return jsonify({"message": "Current password is incorrect"}), 401
-        
-    # Hash the new password
+
     hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
-    
-    # Update password in database
     users_collection.update_one(
         {"_id": current_user['_id']},
         {"$set": {"password": hashed_password}}
     )
-    
+
     return jsonify({"message": "Password changed successfully"})
+
+# New endpoints for the answer evaluation feature
+
+@app.route("/api/submit-answer", methods=["POST"])
+def submit_answer():
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"message": "No data provided"}), 400
+            
+        question_set_id = data.get('question_set_id')
+        question_index = data.get('question_index')
+        user_answer = data.get('answer')
+        
+        if not question_set_id or question_index is None or not user_answer:
+            return jsonify({"message": "Question set ID, question index and answer are required"}), 400
+            
+        # Get the question set from database
+        question_set = questions_collection.find_one({"_id": question_set_id})
+        if not question_set:
+            return jsonify({"message": "Question set not found"}), 404
+            
+        if question_index >= len(question_set["questions"]):
+            return jsonify({"message": "Question index out of range"}), 400
+            
+        # Get expected answer
+        expected_answer = question_set["expected_answers"][question_index]
+        
+        # Get feedback instead of score
+        from utils.answer_evaluator import compare_and_provide_feedback
+        feedback = compare_and_provide_feedback(user_answer, expected_answer)
+        
+        # Store the user's answer and feedback
+        user_id = request.cookies.get('token', 'anonymous_user')
+        answer_id = str(uuid.uuid4())
+        user_answers_collection.insert_one({
+            "_id": answer_id,
+            "user_id": user_id,
+            "question_set_id": question_set_id,
+            "question_index": question_index,
+            "question": question_set["questions"][question_index],
+            "user_answer": user_answer,
+            "expected_answer": expected_answer,
+            "feedback": feedback,
+            "timestamp": datetime.utcnow()
+        })
+        
+        return jsonify({
+            "feedback": feedback,
+            "expected_answer": expected_answer
+        })
+    except Exception as e:
+        print(f"Error in submit_answer: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+    
+@app.route("/api/get-answers", methods=["GET"])
+@token_required
+def get_user_answers(current_user):
+    question_set_id = request.args.get('question_set_id')
+    if not question_set_id:
+        return jsonify({"message": "Question set ID is required"}), 400
+        
+    # Get all answers for this question set by the current user
+    answers = list(user_answers_collection.find(
+        {"user_id": current_user['_id'], "question_set_id": question_set_id},
+        {"_id": 0, "user_id": 0}
+    ))
+    
+    # If old entries have match_percentage but no feedback, add a note
+    for answer in answers:
+        if "match_percentage" in answer and "feedback" not in answer:
+            answer["feedback"] = "Detailed feedback not available for this answer."
+            
+    return jsonify(answers)
+
+@app.route("/api/get-question-set/<question_set_id>", methods=["GET"])
+def get_question_set(question_set_id):
+    question_set = questions_collection.find_one({"_id": question_set_id})
+    if not question_set:
+        return jsonify({"message": "Question set not found"}), 404
+        
+    # Don't send expected answers to frontend
+    question_set.pop("expected_answers", None)
+    
+    # Convert ObjectId to string for JSON serialization
+    question_set["_id"] = str(question_set["_id"])
+    
+    return jsonify(question_set)
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    return jsonify({
+        "error": str(e),
+        "trace": traceback.format_exc()
+    }), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
