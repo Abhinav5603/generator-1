@@ -15,7 +15,7 @@ from functools import wraps
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=["*"], supports_credentials=True)
+CORS(app, origins=["https://frontend-5q11.onrender.com"], supports_credentials=True)
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
