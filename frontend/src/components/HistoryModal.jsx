@@ -16,7 +16,7 @@ const HistoryModal = ({ showHistory, setShowHistory }) => {
   const fetchHistory = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/question-history-public");
+      const res = await fetch("https://backend-qlgj.onrender.com/api/question-history-public");
       
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
