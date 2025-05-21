@@ -8,3 +8,4 @@ openai==1.6.0
 spacy==3.7.2
 python-docx==1.0.1
 PyMuPDF==1.23.7
+gunicorn
