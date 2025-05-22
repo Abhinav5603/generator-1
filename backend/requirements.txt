@@ -12,3 +12,6 @@ requests==2.31.0
 urllib3==2.2.1
 certifi==2024.2.2
 gunicorn==21.2.0
+PyMuPDF==1.23.7
+uuid==1.30
+traceback2==1.4.0
