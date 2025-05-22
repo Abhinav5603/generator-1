@@ -16,20 +16,7 @@ load_dotenv()
 
 app = Flask(__name__)
 # CORS configuration
-app.config['CORS_HEADERS'] = 'Content-Type'
-app.config['CORS_SUPPORTS_CREDENTIALS'] = True
-app.config['CORS_ORIGINS'] = ['https://frontend-5q11.onrender.com']
-
-cors = CORS(app, 
-    resources={
-        r"/*": {
-            "origins": app.config['CORS_ORIGINS'],
-            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
-            "supports_credentials": True,
-            "expose_headers": ["Content-Type", "Authorization"]
-        }
-    })
+CORS(app, origins=["*"], supports_credentials=True)
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -38,7 +25,7 @@ JWT_SECRET = os.getenv("JWT_SECRET", "555")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION = 24  # hours
 
-client = MongoClient("mongodb+srv://test20061004:bJVWovgn3uVv3VJb@cluster0.vhqnytc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+client = MongoClient("mongodb+srv://abhinav:abhinav56@projectquestions.xcmjkfj.mongodb.net/?retryWrites=true&w=majority&appName=projectquestions")
 db = client["interview_app_db"]
 users_collection = db["users"]
 questions_collection = db["questions"]
