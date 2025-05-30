@@ -52,7 +52,7 @@ const QuestionGenerator = ({ mode, theme }) => {
       formData.append('file', file);
       
       // Use public endpoint for file processing
-      const response = await fetch('https://backend-qlgj.onrender.com/api/upload-resume-public', {
+      const response = await fetch('https://generator-1-5mub.onrender.com/api/upload-resume-public', {
         method: 'POST',
         body: formData,
       });
@@ -139,7 +139,7 @@ const QuestionGenerator = ({ mode, theme }) => {
       
       try {
         // Use public endpoint for voice processing
-        const response = await fetch('https://backend-qlgj.onrender.com/api/process-voice-public', {
+        const response = await fetch('https://generator-1-5mub.onrender.com/api/process-voice-public', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -295,7 +295,7 @@ const QuestionGenerator = ({ mode, theme }) => {
     setError('');
     
     try {
-      const response = await fetch('https://backend-qlgj.onrender.com/api/submit-answer', {
+      const response = await fetch('https://generator-1-5mub.onrender.com/api/submit-answer', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
