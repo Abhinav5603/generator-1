@@ -11,7 +11,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await fetch('https://generator-1-5mub.onrender.com/api/profile', {
+        const response = await fetch('https://generator-1-backend.onrender.com/api/profile', {
           method: 'GET',
           credentials: 'include', // Important for cookies
         });
@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     setError(null);
     try {
-      const response = await fetch('https://generator-1-5mub.onrender.com/api/login', {
+      const response = await fetch('https://generator-1-backend.onrender.com/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -61,7 +61,7 @@ export const AuthProvider = ({ children }) => {
   const register = async (username, email, password) => {
     setError(null);
     try {
-      const response = await fetch('https://generator-1-5mub.onrender.com/api/register', {
+      const response = await fetch('https://generator-1-backend.onrender.com/api/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -85,7 +85,7 @@ export const AuthProvider = ({ children }) => {
   // Logout function
   const logout = async () => {
     try {
-      await fetch('https://generator-1-5mub.onrender.com/api/logout', {
+      await fetch('https://generator-1-backend.onrender.com/api/logout', {
         method: 'POST',
         credentials: 'include',
       });
