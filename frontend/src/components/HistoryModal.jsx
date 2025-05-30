@@ -16,7 +16,7 @@ const HistoryModal = ({ showHistory, setShowHistory }) => {
   const fetchHistory = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("https://generator-1-5mub.onrender.com/api/question-history-public");
+      const res = await fetch("https://generator-1-backend.onrender.com/api/question-history-public");
       
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
